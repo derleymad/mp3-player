@@ -1,239 +1,294 @@
-from tkinter import messagebox, filedialog
-from pytube import YouTube,Playlist
+import os 
+from pygame.mixer import *
+from pygame.time import *
 from pathlib import Path
-from tkinter import ttk
-import re,os,threading,time
-from tkinter import *
-import tkinter as tk
-import subprocess
-from math import floor
+from tkinter import ANCHOR, Tk,Frame,Label,Button,Listbox,PhotoImage,BOTH,CENTER,ACTIVE
+from tkinter.filedialog import askdirectory
 
-linksNaoBaixados,threads,links,tits,erros,atual = [],[],[],[],0,0
+song_list = ''; threads = []; parado = False ; tocando = '';index = 0
 
-## USAR TIME PARA MEDIR TEMPO START =TIME() STOP = TIME()
-def unzipFFMPEG():
-    if os.path.isfile('assets\\exe\\ffmpeg.exe'):
-        print('tem o arquivo exe')
+#ROOT
+root = Tk()
+root.geometry('280x400')
+root.title('MP3 Adênia')
+root.config(cursor="heart") 
+root.resizable(0,0)
+root.config(bg='black')
+root.attributes('-alpha',0.9)
+
+#FRAME1
+frame1 = Frame(
+    root,
+    bg='black'
+    )
+frame1.pack(
+    fill=BOTH,
+    expand=True
+    )
+
+#FRAME2
+frame2 = Frame(
+    root,
+    bg='black'
+    )
+frame2.pack(
+    fill='x',
+    expand=False
+    )
+
+#FRAME3
+frame3 = Frame(
+    root,
+    bg='black',
+    highlightbackground="gray",
+    highlightthickness=1
+
+    )
+frame3.pack(
+    fill=BOTH,
+    expand=True, 
+    padx=10,
+    pady=10
+    )
+
+#IMAGENS DOS BOTÕES
+imgPlay = PhotoImage(file = "assets/images/play_img.png")
+imgPause = PhotoImage(file = "assets/images/pause_img.png")
+imgNext = PhotoImage(file = "assets/images/next_img.png")
+imgPreview = PhotoImage(file = "assets/images/prev_img.png")
+imgAsk = PhotoImage(file = "assets/images/lupa2.png")
+
+#FUNCOES DO PROGRAMA
+
+def changeOnHover(button, colorOnHover): 
+
+   button.bind("<Enter>", func=lambda e: button.config( 
+       background = colorOnHover
+        )) 
+   button.bind("<Leave>", func=lambda e: button.config( 
+       background = 'black' 
+        )) 
+
+def changeImgPlayButton(Evento = None):
+    song = listbox.get(ANCHOR)
+    if tocando != song:
+        buttonPlay.config(image=imgPlay)
     else:
-        print('ainda não tem')
-        subZip = subprocess.getstatusoutput(f'assets\\exe\\UnRAR.exe e -y assets\\exe\\ffmpeg.rar assets\\exe')
-        print(subZip)
+        buttonPlay.config(image=imgPause)
+
+def defaultList():
+    global song_list
+    list = '.'
+    try:
+        list = str(Path.home() / "Music")
+    except:
+        pass
+
+    os.chdir(list) 
+    song_list = os.listdir() 
+
+    addToList(song_list)
         
+    labelTop['text'] = os.path.basename(list)
 
-def startThreadProcess():
-    myNewThread = threading.Thread(target=Download)
-    threads.append(myNewThread)
-    myNewThread.start()
-    
-def startThreadProcessToAdd(Event=None):
-    myNewThreadToAdd = threading.Thread(target=add_item)
-    threads.append(myNewThreadToAdd)
-    myNewThreadToAdd.start()
-    
-def add_item(Event=None):
+def addToList(song_list):
+    clearList()
+    for song in song_list:
+        if '.mp3' in song:
+            if len(song) >= 30:
+                songOut = song
+                listbox.insert('end', songOut[:29]+' ... '+'.mp3')
+            else:
+                listbox.insert('end',song)
+        else: 
+            song_list.remove(song)
 
-    target = linkText.get()
-    x = str(re.findall("playlist", target))
-    
-    #Se for playlist
-    if 'playlist' in x:
-        print('é uma playlist')
-        p = Playlist(target)
+def clearList():
+    listbox.delete(0,'end') 
 
-        try:
-            for url in p.video_urls:
-                links.append(str(url))
-                yt = YouTube(url)
-                tit = str(yt.title)
-                list_tasks.insert("0",tit[:59]+'...')
-                progresslabel.config(text="0" + "/" + str(len(links)))
-        except:
-            print("erro em adiconar elem na playlist")
-            clear_input()
-            return
-        clear_input()
-            
-    #Se não tiver nada 
-    elif target == "":
-        print('link sem nada')
-        return
-    
-    #Se for video normal
-    else:
-        print('é um video normal')
-        #Baixa video normal
-        try:
-            yt = YouTube(target)
-            tit = str(yt.title)
-            tits.append(tit)
-        except:
-            print('falta um link válido')
-            clear_input()
-            return
+def ask(Event = None):
+    global song_list
+    directory = askdirectory()
+    os.chdir(directory) 
+    song_list = os.listdir() 
+    addToList(song_list)
+    labelTop['text'] = os.path.basename(directory)
 
-        clear_input()
-        links.append(target)
-        list_tasks.insert("0",tit)
-        progresslabel.config(text="0" + "/" + str(len(links)))
+def play(Event = None):
+    global song_list,parado,tocando,index
+    song = listbox.get(ACTIVE)
 
-def clear_input(Event=None):
-    linkText.delete(0,"end")
-    
-def reset_task_list(Event=None):
-    global erros,atual,links,tits,linksNaoBaixados;erros=0;atual=0;links=[];tits=[];linksNaoBaixados=[]
-
-    list_tasks.delete(0, END)
-    pb['value'] = 0
-    progresslabel.config(text="")
-        
-def Browse():
-    download_Directory = filedialog.askdirectory(initialdir=os.getcwd(),
-                                                 title="Selecione canto para baixar as músicas")
-    download_Path.set(download_Directory)
-
-def popen_and_call(on_exit, popen_args):
-    def run_in_thread(on_exit, popen_args):
-        proc = subprocess.Popen(*popen_args)
-        proc.wait()
-        on_exit()
-        return
-    thread = threading.Thread(target=run_in_thread, args=(on_exit, popen_args))
-    thread.start()
-    # returns immediately after the thread starts
-    return thread
-    
-def Download():
-    global atual,erros,linksNaoBaixados,out
-    out= ''
-    
-    download_Folder = download_Path.get()
-    progresslabel.config(text=". . .")
-
-    #Se existir algo na lista de links
-    if links:
-        start = time.time()
-        for Youtube_link in links:
-            try:
-                if os.path.isfile(out):
-                    os.remove(out)
-                    
-                yt = YouTube(Youtube_link)
-                
-                #video = yt.streams.filter(only_audio=True).first()
-                video = yt.streams.get_lowest_resolution()
-                out_file = video.download(output_path=download_Folder)
-                out = out_file
-
-                base,ext = os.path.splitext(out_file)
-                new_file = base + '.mp3'
-
-                if not os.path.isfile(new_file) or not os.path.isfile(out_file):
-                    subprocess.call(f'assets\\exe\\ffmpeg -i "{out_file}" "{new_file}" ', shell=True)
-                else:
-                    pass
-
-                atual += 1
-                progresslabel.config(text=str(atual) + "/" + str(len(links)))
-                pb['value'] += 100/len(links)
-                
-            except:
-                print('idade restrita')
-                
-                linksNaoBaixados.append(str(yt.title))
-                erros += 1; atual += 1 
-                print(yt.title + " não será baixado")
-                progresslabel.config(text=str(atual) + "/" + str(len(links)))
-                pb['value'] += 100/len(links)
-            if os.path.isfile(out):
-                os.remove(out)
-
-        stop = time.time()
-        tempoTotal = floor(stop-start)
-        if tempoTotal > 60:
-            tempoTotal = floor(int(tempoTotal / 60))
-            tempoTotal = str(tempoTotal) + ' minutos'
+    if tocando == song:
+        if parado:
+            music.unpause()
+            buttonPlay.config(image= imgPause)
+            parado = False 
         else:
-            tempoTotal = str(tempoTotal) + ' segundos'
-
-
-    #Senão existir nada na lista
+            music.pause()
+            buttonPlay.config(image= imgPlay)
+            parado = True
     else:
-        messagebox.showinfo("YouLey","Quer baixar o que se não tem nada?")
-        return
-
-    if erros>0:
-        msg = str('Baixou quase tudo em '+tempoTotal+'! Com exceção de: ' + str(erros) + ' musicas'+'\n'+'Quais foram?'+'\n'+str(linksNaoBaixados))
-        messagebox.showinfo("YouLey",msg)
+        for i in song_list:
+            if len(i) >= 30:
+                if song[:29] in i:
+                    init()
+                    music.load(i)
+                    music.play()
+                    tocando = song
+                    label['text'] = song 
+                    buttonPlay.config(image= imgPause)
+                    listbox.itemconfig(ACTIVE,{'bg':'light green'})
+            else:
+                if song in i:
+                    init()
+                    music.load(song)
+                    music.play()
+                    label['text'] = song 
+                    tocando = song 
+                    buttonPlay.config(image= imgPause)
+                    listbox.itemconfig(ACTIVE,{'bg':'light green'})
+def selection(signal):
+    global index,song_list
+    for item in listbox.curselection():
+        listBoxIndex = item
+    if signal == 'next':
+        listBoxIndexSignal = listBoxIndex+1
     else:
-        messagebox.showinfo("YouLey","Prontinho! Todas músicas baixadas em "+ tempoTotal)
+        listBoxIndexSignal = listBoxIndex-1
 
-    reset_task_list()
+    listbox.selection_clear(listBoxIndex)
+    listbox.selection_set(listBoxIndexSignal)
+    listbox.activate(listBoxIndexSignal)
 
-#ROOT 
-root = tk.Tk()
-width = int(435)
-height = int(310)
+def next(Event = None):
+    selection('next')
+    play()
 
-#TAMANHO DA TELA E TITULOS
-root.geometry(f"{width}x{height}") 
-root.resizable(0,0) 
-root.title("YouLey") 
-root.config(background="white") 
-#root.attributes('-alpha',0.85)
+def preview(Event = None):
+    selection('prev')
+    play()
 
-#PASTA INICIAL PARA BAIXAR
-downloadPathInitial = str(Path.home() / "Downloads")
-downloads_path = downloadPathInitial
-download_Path = StringVar() 
-
-#PROGRESS BAR
-pb = ttk.Progressbar(root,orient='horizontal',mode='determinate',length=300)
-pb.grid(row=22,column=0, columnspan=3, pady=5)
-
-#LABEL DO LINK COPIADO
-link_label = Label(root,text="Link copiado :",bg="#E8D579") 
-link_label.grid(row=1,column=0,pady=5,padx=5)
+#TKINTER PART OF PROGRAM
+listbox = Listbox(
+    frame1,
+    bg='black',
+    fg='blue',
+    font=('Times','10'),
+    justify=CENTER,
+    selectmode="single"
+    )
 
 #LIST BOX
-list_tasks = tk.Listbox(root,justify="center",width=70,height=10,bd=2, fg="green")
-list_tasks.grid(row=3, column=0, rowspan=10, columnspan=3, pady=5)
-list_tasks.bind("<Delete>", reset_task_list)
+listbox.pack(
+    side='bottom',
+    expand=True,
+    fill='both',
+    padx=10,
+    )
 
-#ENTRY DO LINK
-linkText = Entry(root,width=55) 
-linkText.grid(row=1,column=1,pady=5,padx=5,columnspan = 2)
-linkText.bind("<Return>", startThreadProcessToAdd)
-linkText.focus()
+listbox.bind('<Double-Button-1>',play)
+listbox.bind('<Return>',play)
+listbox.bind('<<ListboxSelect>>',changeImgPlayButton)
 
-#DIRETÓRIO A SER SELECIONADO LABEL
-destination_label = Label(root,text="Salvar em :",bg="white") 
-destination_label.grid(row=2,column=0,pady=5,padx=5) 
+#LABEL DA MÚSICA TOCANDO
+label = Label(
+    frame2,
+    bg='black',
+    fg='yellow',
+    font='Times'
+    )
+label.pack(
+    expand=True,
+    fill='both'
+    )
 
-#DIRETÓRIO A SER SELECIONADO ENTRY
-destinationText = Entry(root,width=40,textvariable=download_Path) 
-destinationText.grid(row=2,column=1,pady=5,padx=5)
-download_Path.set(downloadPathInitial)
-destinationText.configure(foreground="gray")
+#BUTÃO ASK
+buttonAsk = Button(
+    frame1,
+    text='. . .',
+    fg='yellow',
+    command=ask, 
+    bg='black',
+    borderwidth=0,
+    font=('Times','15','bold'),
+    cursor='plus'
+    )
+buttonAsk.pack(
+    side='right',
+    padx=10
+    )
 
-#BUTÃO PROCURAR
-browse_B = Button(root,text="Procurar",command=Browse,width=8,bg="white") 
-browse_B.grid(row=2,column=2,pady=1,padx=1) 
+#LABEL DO DIRETÓRIO
+labelTop = Label(
+    frame1,
+    bg='black',
+    fg='yellow',
+    font='Times'
+)
+labelTop.pack(
+    side = 'top',
+    fill='x',
+    pady=10,
+    )
 
-#BUTÃO BAIXAR TUDO
-Download_B = Button(root,text="Baixar tudo",command=startThreadProcess,width=20,bg="#E8D579") 
-Download_B.grid(row=24,column=0,columnspan=4,pady=3,padx=3)
+#BUTAO NEXT
+buttonNext = Button(
+    frame3,
+    width=50,
+    height=50,
+    text='Play',
+    command=next,
+    bg='black',
+    image=imgNext,
+    borderwidth=2,
+    cursor = 'right_side'
+    )
+buttonNext.pack(
+    expand=False,
+    side='right',
+    padx=20
+    )
 
-#LABEL PROGRESS
-progresslabel = tk.Label(root, text='',width=5, bg="white")
-progresslabel.grid(row=22,column=0)
+#BUTAO PLAY
+buttonPlay = Button(
+    frame3,
+    width=50,
+    height=50,
+    text='Play',
+    command=play,
+    bg='black',
+    image=imgPlay,
+    borderwidth=2
+    )
+buttonPlay.pack(
+    expand=False,
+    side='right',
+    )
 
-#LABEL FOOTER
-footer = tk.Label(root, text='@derleymad',width=10, bg="white")
-footer.grid(row=24, column=2,columnspan=2,pady=10)
-footer.configure(foreground="gray")
+#BUTAO PREVIEW
+buttonPreview = Button(
+    frame3,
+    width=50,
+    height=50,
+    text='Play',
+    command=preview,
+    bg='black',
+    image=imgPreview,
+    borderwidth=2,
+    cursor= 'left_side'
+    )
+buttonPreview.pack(
+    expand=False,
+    side='right',
+    padx=20
+    )
 
-#UNZIP FILES
-unzipFFMPEG()
+changeOnHover(buttonPlay,'#202020')
+changeOnHover(buttonNext,"#202020")
+changeOnHover(buttonPreview,"#202020")
+changeOnHover(buttonAsk,"#202020")
 
-#MAIN LOOP
-root.mainloop() 
+defaultList()
+
+root.mainloop()
+  
